@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>qc-defect-analysis 使用说明</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:#f4f6f8; color:#2c3e50; line-height:1.7; }
+.wrap { max-width:860px; margin:0 auto; padding:32px 24px 80px; }
+.hero { background:linear-gradient(135deg,#1a5276,#2e86c1); color:#fff; border-radius:12px; padding:30px; margin-bottom:24px; }
+.hero h1 { font-size:22px; margin-bottom:8px; }
+.hero .sub { font-size:13px; opacity:.85; }
+.card { background:#fff; border-radius:10px; padding:22px 24px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+.card h2 { font-size:16px; color:#1a5276; border-left:4px solid #2e86c1; padding-left:10px; margin-bottom:12px; }
+.card h3 { font-size:14px; color:#34495e; margin:14px 0 6px; }
+table { width:100%; border-collapse:collapse; font-size:13px; margin:10px 0; }
+th { background:#eaf2f8; color:#1a5276; padding:8px 10px; text-align:left; border-bottom:2px solid #2e86c1; font-weight:600; }
+td { padding:8px 10px; border-bottom:1px solid #eee; vertical-align:top; }
+tr:hover td { background:#f8fbfd; }
+.note { background:#eaf2f8; border-left:4px solid #2e86c1; padding:12px 14px; border-radius:6px; margin:10px 0; font-size:13px; }
+.warn { background:#fdf2e9; border-left:4px solid #e67e22; padding:12px 14px; border-radius:6px; margin:10px 0; font-size:13px; }
+.tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; margin-right:6px; }
+.t-keep { background:#e8f8f5; color:#1e8449; }
+.t-rewrite { background:#fef5e7; color:#e67e22; }
+.t-del { background:#fdecea; color:#c0392b; }
+code { background:#f0f3f5; padding:2px 6px; border-radius:4px; font-size:12px; color:#c0392b; font-family:Menlo,Consolas,monospace; }
+ol,ul { padding-left:20px; font-size:13px; }
+li { margin:4px 0; }
+.footer { font-size:12px; color:#999; text-align:center; margin-top:24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+<h1>qc-defect-analysis 使用说明</h1>
+<div class="sub">版本 V1.0 ｜ 2026-09-28 ｜ 给使用者的操作手册（SKILL.md 是 AI 内部流程，本文件是你调起、喂数据、读结果的入口）</div>
+</div>
+
+<div class="card">
+<h2>一、这个 skill 能干什么</h2>
+<p style="font-size:14px"><strong>把 QC 自检 / 质量事件的台账 Excel，变成「分类 + 趋势 + 根因 + CAPA + 自检」的完整分析报告（HTML + 自检表）。</strong></p>
+<h3>覆盖数据源</h3>
+<table>
+<tr><th>数据源</th><th>说明</th><th>触发词举例</th></tr>
+<tr><td>QC 自检缺陷台账</td><td>内部审计发现的记录/标识/管理/设备类缺陷</td><td>“对自检情况进行趋势分析”</td></tr>
+<tr><td>OOX（OOS/OOT/OOE）</td><td>检测结果异常</td><td>“OOS 回顾”</td></tr>
+<tr><td>偏差 / 验证偏差</td><td>工艺或验证偏离</td><td>“偏差周期对比”</td></tr>
+<tr><td>无效测试台账</td><td>实验室运行中断/系统适用性失败</td><td>“无效测试分析”</td></tr>
+</table>
+<div class="warn"><strong>不覆盖</strong>：工作量本身的人力测算（人均负荷、人员缺口、弹性配置）——走工作量线 <code>pharma-qc-workload-analysis</code>。本 skill 只做「质量事件与检验压力的相关性」。</div>
+</div>
+
+<div class="card">
+<h2>二、怎么调起</h2>
+<p style="font-size:14px">直接说一句含触发词的话即可：</p>
+<ul>
+<li>“对 <code>QC自检汇总.xlsx</code> 做趋势分析，聚焦原辅料+包材及水分析组”</li>
+<li>“做 25 vs 26 年 OOS 同比回顾”</li>
+<li>“分析无效测试台账，按班组分类”</li>
+</ul>
+<div class="note"><strong>关键</strong>：任务命中触发词后，AI 第一步必须 <code>skill_view</code> 加载本 skill 正文，不能凭记忆直接开跑（AGENTS.md 已立强制规则）。</div>
+</div>
+
+<div class="card">
+<h2>三、喂数据前你要准备的 3 件事</h2>
+<table>
+<tr><th>#</th><th>你要给的</th><th>为什么</th></tr>
+<tr><td>1</td><td>台账 Excel（放 <code>&lt;工作目录&gt;/&lt;类型&gt;/</code> 下）</td><td>数据源。多 sheet / 跨年 sheet 都行</td></tr>
+<tr><td>2</td><td>聚焦班组（如“原辅料+包材及水分析组”）</td><td>不指定则全组分析，数据量大</td></tr>
+<tr><td>3</td><td>归一化分母（生产批次数 / 检验批次数 / 在岗人数 / 加班调休工时）</td><td>没有则趋势判断降级为绝对数，不可与产量变化解耦</td></tr>
+</table>
+<h3>分母取数顺序（skill 写死的三级）</h3>
+<ol>
+<li><strong>先向你索取</strong> — 拿到什么用什么，不臆测</li>
+<li>或<strong>从已有报告/台账取数</strong>（工作量趋势报告、台账）</li>
+<li>都拿不到 → <strong>降级为绝对数</strong>，并显式标注“归一化所需分母缺失”</li>
+</ol>
+<div class="warn">没有分母<strong>不能</strong>自行断言“事件增加与工作量正相关”——这是提问式分析步骤，不是结论。</div>
+</div>
+
+<div class="card">
+<h2>四、你会拿到什么（交付物）</h2>
+<table>
+<tr><th>交付物</th><th>格式</th><th>位置</th></tr>
+<tr><td>分析报告正文</td><td>Markdown</td><td><code>&lt;工作目录&gt;/&lt;类型&gt;/趋势分析/</code></td></tr>
+<tr><td>交互式 HTML 报告</td><td>HTML（ECharts + KPI 卡片 + 自检表）</td><td>同上 <code>.html</code></td></tr>
+<tr><td>修复副本（源 xlsx 打不开时）</td><td>xlsx</td><td><code>/tmp/</code> 或数据源旁</td></tr>
+</table>
+<h3>HTML 报告固定包含</h3>
+<ul>
+<li>概览数字卡片（KPI）</li>
+<li>月度趋势柱状图 / 根因分类饼图 / 部门×根因矩阵</li>
+<li>重复事件详情</li>
+<li>关键发现与建议</li>
+<li><strong>生成端自检表</strong>（D1–D7 + Q1–Q6 逐项 ✅/🟡/🔴）— 没有这张表的报告视为未完成</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>五、报告里的「自检表」怎么看</h2>
+<p style="font-size:14px">每张报告末尾附 D1–D7（数据正确性）+ Q1–Q6（分析质量）自检：</p>
+<table>
+<tr><th>标记</th><th>含义</th></tr>
+<tr><td>✅ 通过</td><td>该项满足</td></tr>
+<tr><td>🟡 待确认</td><td>需你人工判断或补数据（如 Q2 根因深度、Q6 GMP 框架嵌入）</td></tr>
+<tr><td>🔴 不通过</td><td>该项有缺陷，报告已写明整改方向</td></tr>
+</table>
+<div class="note"><strong>你作为使用者要做的</strong>：看 🟡/🔴 项，决定是否补数据/下版本修订。🟡 通常是"数据缺失"或"需确认归因"，不是 AI 算错。</div>
+</div>
+
+<div class="card">
+<h2>六、源文件打不开（xlsx 损坏）怎么办</h2>
+<p style="font-size:14px">skill 已内置关 0（文件可访问性检查）。若你的 xlsx 是 WPS 导出、GUID 损坏或空 ZIP：</p>
+<ul>
+<li><strong>原件不要动</strong>，AI 会自动生成修复副本（<code>/tmp/xxx_fixed.xlsx</code>）</li>
+<li>修复方法：删 <code>customWorkbookViews</code> 元素 + 清理 <code>definedName</code> GUID 前缀</li>
+<li>修复成功才进后续解析；失败会直说"无法读取"，不编造数据</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>七、数据脱敏提醒</h2>
+<p style="font-size:14px">喂给 AI 的台账里，<strong>人名/批号/时限可能是占位符</strong>（空 / <code>xxx</code> / 随意填）：</p>
+<ul>
+<li>占位符既不是内容也不是缺口：不当真值、不据此判"已具备"、不因它阻塞流程</li>
+<li>AI 会照实记录 + 显式标注"待回填"，不会替你脑补</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>八、references 结构（给要二次开发 / 迁移的人）</h2>
+<p style="font-size:14px"><code>references/</code> 下 15 个文件分三类：</p>
+<table>
+<tr><th>类别</th><th>文件</th></tr>
+<tr><td><span class="tag t-keep">通用方法 · 可跨公司带走</span></td><td>capa-effectiveness / data-model / html-output-patterns / oos-deviation-severity-inference / report-sheets / workload-correlation-analysis</td></tr>
+<tr><td><span class="tag t-rewrite">方法通用 · 举例带本公司数据 · 换公司需局部重写</span></td><td>data-parsing-pitfalls / defect-classification-taxonomy / invalid-test-analysis-patterns / oos-event-id-and-source-reconciliation / field-cleaning-and-scoping</td></tr>
+<tr><td><span class="tag t-del">绑死本公司 · 换公司需重建</span></td><td>column-mapping-guide.md（24/25/26 年列号 + 房间清单 + 房间→班组映射）</td></tr>
+</table>
+<div class="note">迁移/打包细节见 <code>references/portability-and-migration.md</code>。</div>
+</div>
+
+<div class="card">
+<h2>九、文件命名与修订规范</h2>
+<ul>
+<li>报告文件命名：<code>{项目}_{日期}_V{版本号}</code>（如 <code>QC自检_原辅料组_趋势分析_20260928_V1.0</code>）</li>
+<li>修订后末尾追加「修订历史」段落，保留近三个版本</li>
+<li><strong>禁止直接修改源文件</strong>，所有修订在副本上进行</li>
+</ul>
+</div>
+
+<div class="footer">qc-defect-analysis · USAGE.html · 生成于 2026-09-28</div>
+</div>
+</body>
+</html>
